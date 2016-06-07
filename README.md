@@ -8,7 +8,7 @@ A Grunt plugin to manage dockers on clusters using dockerode and pkgcloud.
 grunt clouddock:node: [ create | list | destroy ]
 ##### Manage cluster security groups:
 grunt cloudock:secgroup:[ create | list | update | destroy ]
-### In developping ...
+### In developing ...
 
 ### Todo List:
  - cloudock:localimg:[ build | push ]  - - - Build app images locally and push to private registry
