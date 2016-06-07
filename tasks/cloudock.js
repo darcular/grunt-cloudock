@@ -8,8 +8,6 @@
 
 'use strict';
 
-"use strict";
-
 // Plugin name setting
 var pluginName = "cloudock";
 var pluginDescription = "Plugin for easing clusters deployment";
