@@ -6,9 +6,7 @@ var utils = require("../../utils/utils");
 var logUpdate = require('log-update');
 var _ = require('underscore');
 
-var node = function (grunt, options, done) {
-    grunt.fail.warn("Commands for manage node. Use --help to find out usage.");
-};
+var node = {};
 
 node.create = function (grunt, options, done) {
     grunt.log.ok("Started creating node...");
@@ -111,23 +109,30 @@ node.list.description = "List nodes of cluster";
  *          done Callback to call when the request is completed
  */
 node.destroy = function (grunt, options, done) {
-    grunt.log.ok("Started deleting nodes...");
-    var iterator = function (node, iterationDone) {
-        var client = pkgcloud.compute.createClient(options.pkgcloud.client);
-        client.destroyServer(node.host.id, function (err, result) {
-            utils.handleErr(err, iterationDone, true);
-            grunt.log.ok("Deleted node: " + result.ok);
-            return iterationDone();
-        });
-    };
-    var callback = function (err) {
-        grunt.log.ok("Done deleting nodes.");
-        if (err) {
-            return done(err);
+    async.series([
+        function(startDestroy){
+            promptBeforeDestroy(done, startDestroy);
+        },
+        function(){
+            grunt.log.ok("Started deleting nodes...");
+            var iterator = function (node, iterationDone) {
+                var client = pkgcloud.compute.createClient(options.pkgcloud.client);
+                client.destroyServer(node.host.id, function (err, result) {
+                    utils.handleErr(err, iterationDone, true);
+                    grunt.log.ok("Deleted node: " + result.ok);
+                    return iterationDone();
+                });
+            };
+            var callback = function (err) {
+                grunt.log.ok("Done deleting nodes.");
+                if (err) {
+                    return done(err);
+                }
+                done();
+            }
+            utils.iterateOverClusterNodes(options, null, iterator, callback, false);
         }
-        done();
-    }
-    utils.iterateOverClusterNodes(options, null, iterator, callback, false);
+    ])
 };
 node.destroy.description = "Destroy node VMs of cluster";
 
@@ -166,4 +171,17 @@ function changeStatusColor(hostStatus) {
 
     }
     return hostStatus;
+}
+
+function promptBeforeDestroy(done, startDestroy){
+    var rl = require("readline").createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+    rl.question("Going to destroy all cluster nodes. Are you sure? (y/N)", function(answer){
+        if(!(answer.toUpperCase() == "Y" || answer.toUpperCase() =="YES")){
+            return done();
+        }
+        startDestroy();
+    })
 }
