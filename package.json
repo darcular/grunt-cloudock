@@ -1,0 +1,38 @@
+{
+  "name": "grunt-cloudock",
+  "description": "A Grunt plugin to manage dockers on clusters using dockerode and pkgcloud.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "Yikai Gong",
+    "email": "yikaig@student.unimelb.edu.au"
+  },
+  "private": true,
+  "homepage": "https://github.com/darcular/grunt-cloudock",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/darcular/grunt-cloudock"
+  },
+  "engines": {
+    "node": ">= 0.10.0"
+  },
+  "scripts": {
+    "test": "grunt --base ./test --gruntfile ./test/Gruntfile.js test"
+  },
+  "devDependencies": {
+    "grunt": "~0.4.5"
+  },
+  "keywords": [
+    "nodejs",
+    "grunt",
+    "cloudpkg",
+    "dockerode"
+  ],
+  "dependencies": {
+    "async": "^1.5.2",
+    "cli-table": "^0.3.1",
+    "log-update": "^1.0.2",
+    "pkgcloud": "git+https://github.com/lmoran/pkgcloud#master",
+    "underscore": "^1.8.3"
+  }
+}
