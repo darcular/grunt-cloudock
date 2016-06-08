@@ -21,7 +21,8 @@ module.exports = function (grunt) {
     // Load exported tasks stack module.
     var funcModule = _.extend(
         require("./lib/node"),
-        require("./lib/securityGroup")
+        require("./lib/securityGroup"),
+        require("./lib/docker")
     );
 
     /**

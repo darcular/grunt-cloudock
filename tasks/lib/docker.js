@@ -7,7 +7,7 @@
 var pkgcloud = require("pkgcloud"), _ = require("underscore");
 var async = require("async");
 var Docker = require("dockerode"), querystring = require("querystring");
-var utils = require("../utils/utils");
+var utils = require("../../utils/utils");
 
 var docker = {};
 module.exports.docker = docker;
