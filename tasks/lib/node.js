@@ -27,7 +27,8 @@ node.create = function (grunt, options, gruntDone) {
             key_name: options.pkgcloud.key_name
         };
         client.createServer(serverConfig, function (err, result) {
-            utils.handleErr(err, iterationDone, true);
+            if (err)
+                return utils.handleErr(err, iterationDone, false);
             var updateTuple = function () {
                 utils.queryNode(options, result.id, function (node) {
                     var nodeTuple = [];
@@ -57,8 +58,9 @@ node.create = function (grunt, options, gruntDone) {
         clearInterval(tableUpdater);
         logUpdate(composeNodesTable(_.toArray(nodes)));
         logUpdate.done();
-        grunt.log.ok("Done creating node.");
-        utils.handleErr(err, gruntDone, false);
+        if (err)
+            return utils.handleErr(err, gruntDone, false);
+        grunt.log.ok("Done creating nodes.");
         return gruntDone();
     };
     async.each(utils.getDefinedNodes(options), iterator, iteratorStopped);
@@ -88,7 +90,8 @@ node.list = function (grunt, options, gruntDone) {
         return iterationDone();
     };
     var iteratorStopped = function (err) {
-        utils.handleErr(err, gruntDone, false);
+        if (err)
+            return utils.handleErr(err, gruntDone, false);
         console.log(composeNodesTable(nodeTupleList));
         return gruntDone();
     };
@@ -125,7 +128,8 @@ node.destroy = function (grunt, options, gruntDone) {
             var iterator = function (node, iterationDone) {
                 var client = pkgcloud.compute.createClient(options.pkgcloud.client);
                 client.destroyServer(node.id, function (err, result) {
-                    utils.handleErr(err, iterationDone, true);
+                    if (err)
+                        return utils.handleErr(err, iterationDone, true);
                     grunt.log.ok("Deleted node: " + result.ok);
                     return iterationDone();
                 });
@@ -136,7 +140,8 @@ node.destroy = function (grunt, options, gruntDone) {
             utils.iterateOverClusterNodes(options, null, iterator, iteratorStopped, false);
         }
     ], function (err) {
-        utils.handleErr(err, gruntDone, false);
+        if (err)
+            return utils.handleErr(err, gruntDone, false);
         grunt.log.ok("Done deleting nodes.");
         return gruntDone();
     })
@@ -172,8 +177,7 @@ node.dns = function (grunt, options, gruntDone) {
                 return iterationDone();
             };
             var iteratorStopped = function (err) {
-                utils.handleErr(err, next, false);
-                return next(null, hosts);
+                return err ? utils.handleErr(err, next, false) : next(null, hosts);
             };
             utils.iterateOverClusterNodes(options, "", iterator, iteratorStopped, true);
         },
@@ -189,14 +193,12 @@ node.dns = function (grunt, options, gruntDone) {
                 });
             };
             var iteratorStopped = function (err) {
-                utils.handleErr(err, next, false);
+                return err ? utils.handleErr(err, next, false) : next(null);
             };
             utils.iterateOverClusterNodes(options, "active", iterator, iteratorStopped, false)
-
         }
     ], function (err) {
-        utils.handleErr(err, gruntDone, false);
-        return gruntDone();
+        return err ? utils.handleErr(err, gruntDone, false) : gruntDone();
     });
 };
 

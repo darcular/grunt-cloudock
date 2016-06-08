@@ -21,7 +21,8 @@ secgroup.create = function (grunt, options, done) {
         groupInfo.name = utils.securitygroupName(options.cluster, grpName);
         groupInfo.description = options.securitygroups[grpName].description;
         pkgcloudClient.createSecurityGroup(groupInfo, function (err, result) {
-            utils.handleErr(err, iterationDone, true);
+            if (err)
+                return utils.handleErr(err, iterationDone, true);
             createdGroups.push({id: result.id, name: grpName});
             grunt.log.ok("Created security group: "
                 + utils.securitygroupName(options.cluster, grpName) + " "
@@ -42,7 +43,8 @@ secgroup.destroy = function (grunt, options, done) {
     var iterator = function (grp, iterationDone) {
         var pkgcloudClient = pkgcloud.network.createClient(options.pkgcloud.client);
         pkgcloudClient.destroySecurityGroup(grp.id, function (err, grpId) {
-            utils.handleErr(err, done);
+            if (err)
+                return utils.handleErr(err, done);
             grunt.log.ok("Deleted security group: " + grp.name + " " + grpId + " ");
             return iterationDone(err);
         });
@@ -78,10 +80,8 @@ secgroup.list = function (grunt, options, done) {
 };
 secgroup.list.description = "List security groups for cluster";
 
-
 secgroup.update = function (grunt, options, gruntDone) {
     grunt.log.ok("Started updating security groups...");
-
     async.waterfall([
         // Retrieves the nodes data and puts them in nodes
         function (next) {
@@ -90,91 +90,89 @@ secgroup.update = function (grunt, options, gruntDone) {
                 nodes.push({
                     name: node.name,
                     id: node.id,
-                    address: node.ipv4
+                    ipv4: node.ipv4
                 });
                 return iterationDone();
             };
             var iteratorStopped = function (err) {
-                utils.handleErr(err, next(err), false);
-                return next(null, nodes);
-            }
+                return err ? utils.handleErr(err, next, false) : next(null, nodes);
+            };
             utils.iterateOverClusterNodes(options, "", iterator, iteratorStopped, false);
         },
         // Updates security groups by adding the actual rules
         function (nodes, next) {
+            // for each secgroup
             var iterator = function (secgroup, iterationDone) {
-                //TODO
-                // Puts in selRules all the rules of the existing group
-                // that have a remoteIpPrefixTemplate or a remoteIpPrefix
-                // property defined
-                // var rulesToAdd = [];
-                // var selRules = _.filter(options.securitygroups[utils
-                //     .securitygroupPlainName(grp.name)].rules, function (rule) {
-                //     return rule.remoteIpNodePrefixes || rule.remoteIpPrefix;
-                // });
-                //
-                // // Adds rules to rulesToAdd based on node IP addresses (if
-                // // remoteIpNodePrefixes), and/or remoteIpPrefix
-                // selRules.forEach(function (rule) {
-                //
-                //     if (rule.remoteIpNodePrefixes) {
-                //         nodes
-                //             .forEach(function (node) {
-                //                 if (rule.remoteIpNodePrefixes
-                //                         .indexOf(utils.nodeType(node.name)) >= 0) {
-                //                     rulesToAdd.push({
-                //                         securityGroupId: grp.id,
-                //                         direction: rule.direction,
-                //                         ethertype: rule.ethertype,
-                //                         portRangeMin: rule.portRangeMin,
-                //                         portRangeMax: rule.portRangeMax,
-                //                         protocol: rule.protocol,
-                //                         remoteIpPrefix: node.address
-                //                     });
-                //                 }
-                //             });
-                //     }
-                //
-                //     if (rule.remoteIpPrefix) {
-                //         rulesToAdd.push({
-                //             securityGroupId: grp.id,
-                //             direction: rule.direction,
-                //             ethertype: rule.ethertype,
-                //             portRangeMin: rule.portRangeMin,
-                //             portRangeMax: rule.portRangeMax,
-                //             protocol: rule.protocol,
-                //             remoteIpPrefix: rule.remoteIpPrefix
-                //         });
-                //     }
-                // });
-                //
-                // // Iterates over rulesToAdd and adds them rules
-                // async.each(rulesToAdd, function (rule, callback3) {
-                //     pkgcloud.network.createClient(options.pkgcloud.client)
-                //         .createSecurityGroupRule(rule, function (err, result) {
-                //             utils.dealWithError(err, gruntDone);
-                //             return callback3();
-                //         }, function (err) {
-                //             utils.dealWithError(err, gruntDone);
-                //             grunt.log.ok("Updated security group: " + grp.id);
-                //         });
-                // }, function (err) {
-                //     utils.dealWithError(err, gruntDone);
-                //     grunt.log.ok("Updated security group: " + grp.id);
-                //     return callback2();
-                // });
+                var rulesToAdd = [];
+                var grpSimpleName = utils.securitygroupPlainName(secgroup.name);
+                // Load rules for current group from configuration
+                // TODO check if rules configuration is completed
+                var optionRules = options.securitygroups[grpSimpleName].rules;
+                optionRules = _.filter(optionRules, function (rule) {
+                    return rule.remoteIpNodePrefixes || rule.remoteIpPrefix;
+                });
+                // for each rule option (rule constructor)
+                // console.log(optionRules);
+                optionRules.forEach(function (rule) {
+                    if (rule.remoteIpNodePrefixes) {
+                        var nodePrefixes = rule.remoteIpNodePrefixes;
+                        // for each node, create an instance of this rule option with
+                        // node's ip if node type satisfy nodePrefixes.
+                        // console.log("3"+nodes);
+                        nodes.forEach(function (node) {
+                            var nodeType = utils.nodeType(node.name)
+                            if (nodePrefixes.indexOf(nodeType) >= 0) {
+                                rulesToAdd.push({
+                                    securityGroupId: secgroup.id,
+                                    direction: rule.direction,
+                                    ethertype: rule.ethertype,
+                                    portRangeMin: rule.portRangeMin,
+                                    portRangeMax: rule.portRangeMax,
+                                    protocol: rule.protocol,
+                                    remoteIpPrefix: node.ipv4
+                                });
+                            }
+                        });
+                    }
+                    if (rule.remoteIpPrefix) {
+                        rulesToAdd.push({
+                            securityGroupId: secgroup.id,
+                            direction: rule.direction,
+                            ethertype: rule.ethertype,
+                            portRangeMin: rule.portRangeMin,
+                            portRangeMax: rule.portRangeMax,
+                            protocol: rule.protocol,
+                            remoteIpPrefix: rule.remoteIpPrefix
+                        });
+                    }
+                });
+                async.each(
+                    rulesToAdd,
+                    function (rule, innerIterDone) {
+                        var client = pkgcloud.network.createClient(options.pkgcloud.client);
+                        client.createSecurityGroupRule(rule, function (err, result) {
+                            return err ? utils.handleErr(err, innerIterDone, true) : innerIterDone();
+                        });
+                    },
+                    function (err) {
+                        if (err) {
+                            return utils.handleErr(err, iterationDone, false);
+                        } else {
+                            grunt.log.ok("Updated security group: " + secgroup.id);
+                            return iterationDone();
+                        }
+                    }
+                );
             };
             var iteratorStopped = function (err) {
-                utils.handleErr(err, next, false);
-                return next();
-            }
+                return err ? utils.handleErr(err, next, false) : next(null);
+            };
             utils.iterateOverClusterSecurityGroups(options, iterator, iteratorStopped);
         }
     ], function (err) {
-        utils.handleErr(err, gruntDone, false);
-        return gruntDone();
+        return err ? utils.handleErr(err, gruntDone, false) : gruntDone();
     });
-}
+};
 
 module.exports.secgroup = secgroup;
 

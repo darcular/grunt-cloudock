@@ -37,7 +37,7 @@ module.exports = function (grunt) {
                         protocol : "tcp",
                         portRangeMin : 80,
                         portRangeMax : 81,
-                        remoteIpPrefix : "0.0.0.0/32",
+                        remoteIpPrefix : "0.0.0.0/0",
                         remoteIpNodePrefixes : [ "loadbalancer", "computing" ]
                     } ]
                 },
@@ -49,7 +49,7 @@ module.exports = function (grunt) {
                         protocol : "tcp",
                         portRangeMin : 22,
                         portRangeMax : 22,
-                        remoteIpPrefix : "0.0.0.0/32",
+                        remoteIpPrefix : "0.0.0.0/0",
                         remoteIpNodePrefixes : [ "loadbalancer", "computing" ]
                     } ]
                 }
@@ -84,4 +84,16 @@ module.exports = function (grunt) {
     grunt.registerTask('test', function () {
         console.log("Test missing");
     });
+
+    grunt.registerTask("launch", 'Initiate cluster infrastructure', [
+        "cloudock:secgroup:create",
+        "cloudock:node:create",
+        "cloudock:secgroup:update",
+        "cloudock:node:dns"
+    ]);
+
+    grunt.registerTask("destroy", 'Destroy cluster infrastructure', [
+        "cloudock:node:destroy",
+        "cloudock:secgroup:destroy"
+    ])
 };

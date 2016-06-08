@@ -119,6 +119,18 @@ module.exports.securitygroupCluster = function (secName) {
 };
 
 /**
+ * Returns the name of a security group bar its cluster name
+ *
+ * @param {String}
+ *          secName Name of security groups
+ *
+ * @returns {String} Plain name of the secuirty group
+ */
+module.exports.securitygroupPlainName = function (secName) {
+    return secName.split("-")[1];
+};
+
+/**
  * Returns security groups in the format favored from OpenStack.
  *
  * @param clusterName {String}
@@ -248,15 +260,17 @@ module.exports.preProcessNodeData = function (node) {
     _node.id = node.id ? node.id : "";
     _node.name = node.name ? node.name : "";
     _node.address = _.keys(node.addresses).length > 0 ? _.keys(node.original.addresses)[0] + ": " + node.addresses.public[0] : "";
-    _node.ipv4 = _.keys(node.addresses).length > 0 ? node.addresses.public[0] :"";
+    _node.ipv4 = _.keys(node.addresses).length > 0 ? node.addresses.public[0] : "";
     _node.type = node.name ? module.exports.nodeType(node.name) : "";
     _node.status = node.status ? node.status : "";
     var filteredNodeOptions = _.filter(this.nodetypes, function (nodetype) {
         return nodetype.name === node.name ? module.exports.nodeType(_node.name) : "";
     });
     var nodeOption = filteredNodeOptions.length > 0 ? filteredNodeOptions[0] : undefined;
+    var images = filteredNodeOptions.length > 0 ? filteredNodeOptions[0].images : [];
     if (nodeOption) {
         _node.nodeOption = nodeOption;
+        _node.images = images;
         _node.docker = {
             protocol: this.docker.client.protocol,
             host: node.ipv4,
@@ -266,3 +280,190 @@ module.exports.preProcessNodeData = function (node) {
     }
     return _node;
 }
+
+/**
+ * Dock Utils
+ */
+/**
+ * Executes a function over the images of all the nodes in the cluster
+ *
+ * @param {Object} grunt
+ *          grunt The Grunt instance
+ * @param {Object} options
+ *          options Task options
+ * @param {Function} iterator
+ *          iterator The function is passed an Object containing the image, the
+ *          node, and a callback function to call when one iteration is complete
+ *          (the callback is, if in error, sent an error object)
+ * @param {Function} iteratorStopped
+ *          done Callback to call when the requests are completed (an err
+ *          parameter is passed if an error occurred)
+ * @param  {Boolean} serial
+ */
+module.exports.iterateOverClusterImages = function (grunt, options, iterator, iteratorStopped, serial) {
+    module.exports.iterateOverClusterNodes(
+        options,
+        "",
+        function (node, callback) {
+            // Puts in pulls all the images defined in the Gruntfile that
+            // appear in the current node and adds the node parameters
+            var defImages = grunt.config.get().dock.options.images;
+            var nodePulls = [];
+            var dock = grunt.config.get().dock;
+            _.keys(defImages).forEach(function (imageName) {
+                var image = _.clone(defImages[imageName]);
+                image.auth = dock.options.auth;
+                image.registry = dock.options.registry;
+                image.docker = dock.options.docker
+                image.dockerclient = dock.options.dockerclient;
+                image.name = imageName;
+                image.repo = dock.options.registry + "/" + image.repo + ":" + image.tag;
+                image.node = node;
+                nodePulls.push(image);
+            });
+            nodePulls = _.filter(nodePulls, function (image) {
+                return node.nodeOption.images.indexOf(image.name) >= 0;
+            })
+            async.eachSeries(nodePulls, iterator, function (err) {
+                // FIXME May need handle err
+                callback();
+            });
+        },
+        function (err) {
+            if (err) {
+                return iteratorStopped(err);
+            }
+            return iteratorStopped();
+        },
+        serial
+    );
+};
+
+module.exports.iterateOverClusterContainers = function (grunt, options, iterator, done) {
+
+    // Iterates over all the nodes in the cluster and
+    // puts in containers data about the containers running on the current node
+    var containers = [];
+    module.exports.iterateOverClusterNodes(
+        options,
+        "ACTIVE",
+        function (node, next) {
+            var reqOption = {all: true};
+            (new Docker(node.docker)).listContainers(reqOption, function (err, nodeContainers) {
+                if (err) {
+                    grunt.log.error(err);
+                    return next(err);
+                }
+                nodeContainers.forEach(function (container) {
+                    containers.push({
+                        node: node,
+                        container: container
+                    });
+                });
+                next();
+            });
+        },
+        function (err) {
+            if (err) {
+                grunt.log.error(err);
+                return done(err);
+            }
+            // For every container executes the iterator function and skips errors
+            async.eachSeries(containers, iterator, function (err) {
+                if (err) {
+                    grunt.log.error(err);
+                }
+                done();
+            });
+        });
+};
+
+/**
+ * Returns true if the container is to be processed (that is, either nodetype,
+ * nodeid, and containerid Grunt option are both not defined, or the container
+ * has the id given in containerId, or the node has the id given in nodeId, or
+ * the container has the type given in nodeType
+ *
+ * @param {String}
+ *          grunt Grunt object
+ * @param {String}
+ *          nodeType Cluster node type
+ * @param {String}
+ *          nodeId Cluster node ID
+ * @param {String}
+ *          imageType Image node name
+ * @param {String}
+ *          containerId Current container ID
+ *
+ * @returns {String} Name of cluster
+ */
+module.exports.isContainerToBeProcessed = function (grunt, nodeType, nodeId, imageName, containerId) {
+    return (!grunt.option("nodetype") && !grunt.option("containerid") && !grunt
+            .option("nodeid"))
+        || (grunt.option("containerid") && containerId && containerId === grunt
+            .option("containerid"))
+        || (grunt.option("nodeid") && nodeId && nodeId === grunt.option("nodeid"))
+        || (grunt.option("nodetype") && grunt.option("nodetype") === nodeType && _
+            .find(grunt.config("clouddity.nodetypes"), function (nodetype) {
+                return nodetype.name === nodeType;
+            }).images.indexOf(imageName) >= 0);
+};
+
+/**
+ * Executes a function over the images of all the nodes in the cluster
+ *
+ * @param {Object}
+ *          grunt The Grunt instance
+ * @param {Object}
+ *          options Task options
+ * @param {Function}
+ *          iterator The function is passed an Object with data about node and
+ *          container, the node, and a callback function to call when one
+ *          iteration is complete (the callback is, if in error, sent an error
+ *          object)
+ * @param {Function}
+ *          done Callback to call when the requests are completed (an err
+ *          parameter is passed if an error occurred)
+ */
+module.exports.iterateOverClusterDockerImages = function (grunt, options,
+                                                          iterator, done) {
+
+    // Iterates over all the nodes in the cluster and
+    // puts in images data about the images storing on the current node
+    var images = [];
+    module.exports.iterateOverClusterNodes(
+        options,
+        "ACTIVE",
+        function (node, next) {
+            (new Docker(node.docker)).listImages({}, function (err, nodeImages) {
+                if (err) {
+                    grunt.log.error(err);
+                    return next(err);
+                }
+
+                nodeImages.forEach(function (image) {
+                    images.push({
+                        node: node,
+                        image: image
+                    });
+                });
+
+                next();
+            });
+        },
+        function (err) {
+            if (err) {
+                grunt.log.error(err);
+                return done(err);
+            }
+            // For every image executes the iterator function and skips errors
+            async.eachSeries(images, iterator, function (err) {
+                if (err) {
+                    grunt.log.error(err);
+                }
+                done();
+            });
+        },
+        false
+    );
+};
