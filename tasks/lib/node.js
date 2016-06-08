@@ -28,16 +28,16 @@ node.create = function (grunt, options, done) {
         };
         client.createServer(serverConfig, function (err, result) {
             utils.handleErr(err, iterationDone, true);
-            var updateTuple = function() {
+            var updateTuple = function () {
                 utils.queryNode(options, result.id, function (node) {
                     var nodeTuple = [];
-                    var hostId = node.id ? node.id : "";
-                    var hostName = node.name ? node.name : "";
-                    var hostAddress = _.keys(node.addresses).length > 0 ? _.keys(node.original.addresses)[0] + ":" + node.addresses.public[0] : "";
-                    var hostStatus = node.status ? node.status.toUpperCase() : "";
+                    var hostId = node.id.substr(0, 5)+"..";
+                    var hostName = node.name;
+                    var hostAddress = node.address;
+                    var hostStatus = node.status.toUpperCase();
                     nodeTuple.push(hostId, hostName, hostAddress, changeStatusColor(hostStatus));
                     nodes[hostId] = nodeTuple;
-                    if (hostStatus == "RUNNING"){
+                    if (hostStatus == "RUNNING") {
                         clearInterval(tupleUpdater);
                         return iterationDone();
                     }
@@ -46,7 +46,7 @@ node.create = function (grunt, options, done) {
             updateTuple();
             var tupleUpdater = setInterval(updateTuple, 3000);
             setTimeout(function () {
-                if(tupleUpdater._repeat){
+                if (tupleUpdater._repeat) {
                     clearInterval(tupleUpdater);
                     iterationDone();
                 }
@@ -79,7 +79,7 @@ node.list = function (grunt, options, done) {
     var nodeTupleList = [];
     var iterator = function (node, iterationDone) {
         nodeTuple = [];
-        var hostId = node.id
+        var hostId = node.id.substr(0, 5) + "..";
         var hostName = node.name;
         var hostAddress = node.address;
         var hostStatus = node.status.toUpperCase();
@@ -110,10 +110,10 @@ node.list.description = "List nodes of cluster";
  */
 node.destroy = function (grunt, options, done) {
     async.series([
-        function(startDestroy){
+        function (startDestroy) {
             promptBeforeDestroy(done, startDestroy);
         },
-        function(){
+        function () {
             grunt.log.ok("Started deleting nodes...");
             var iterator = function (node, iterationDone) {
                 var client = pkgcloud.compute.createClient(options.pkgcloud.client);
@@ -143,7 +143,7 @@ function composeNodesTable(nodeTupleList) {
     var table = new Table({
         head: ['Id'.cyan, 'Name'.cyan, 'Zone:Ipv4'.cyan, 'Status'.cyan],
         colWidths: [],
-        style: {compact: true, 'padding-left': 1, 'padding-right': 1},
+        style: {compact: true, 'padding-left': 0, 'padding-right': 0},
         chars: {
             'top': '═', 'top-mid': '╤', 'top-left': '╔', 'top-right': '╗'
             , 'bottom': '═', 'bottom-mid': '╧', 'bottom-left': '╚', 'bottom-right': '╝'
@@ -173,13 +173,13 @@ function changeStatusColor(hostStatus) {
     return hostStatus;
 }
 
-function promptBeforeDestroy(done, startDestroy){
+function promptBeforeDestroy(done, startDestroy) {
     var rl = require("readline").createInterface({
         input: process.stdin,
         output: process.stdout
     });
-    rl.question("Going to destroy all cluster nodes. Are you sure? (y/N)", function(answer){
-        if(!(answer.toUpperCase() == "Y" || answer.toUpperCase() =="YES")){
+    rl.question("Going to destroy all cluster nodes. Are you sure? (y/N)", function (answer) {
+        if (!(answer.toUpperCase() == "Y" || answer.toUpperCase() == "YES")) {
             return done();
         }
         startDestroy();
