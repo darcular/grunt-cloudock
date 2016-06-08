@@ -184,59 +184,30 @@ module.exports.iterateOverClusterNodes = function (options, status, iterator, do
     }
     client.getServers(queryOpt, function (err, nodes) {
         module.exports.handleErr(err, done, false);
-        // Extracts some data about the selected nodes and puts them back into
-        // nodes
-        nodes = _.map(nodes, function (node) {
-            var _node = {}
-            _node.id = node.id ? node.id : "";
-            _node.name = node.name ? node.name : "";
-            _node.address = _.keys(node.addresses).length > 0 ? _.keys(node.original.addresses)[0] + ":" + node.addresses.public[0] : "";
-            _node.type = node.name ? module.exports.nodeType(node.name) : "";
-            _node.status = node.status ? node.status : "";
-            return _node;
-        });
-
-        // Collects data from each nodes,
-        // and sets data from operations for the iterator in the data array
-        var data = [];
-        nodes.forEach(function (node) {
-            var imageNames = _.filter(options.nodetypes, function (nodetype) {
-                return nodetype.name === node.type
-            });
-            var images = imageNames.length > 0 ? imageNames[0].images : [];
-            data.push({
-                hosts: node.hosts,
-                host: node,
-                images: images.join(", "),
-                docker: {
-                    protocol: options.docker.client.protocol,
-                    host: node.address,
-                    port: options.docker.client.port
-                },
-                auth: options.docker.client.auth
-            });
-        });
-
+        // Extracts some data about the selected nodes and puts them back intonodes
+        module.exports.preProcessNodeData.bind(options);
+        nodes = _.map(nodes, module.exports.preProcessNodeData.bind(options));
         // Calls the iterator for all the elements in data
         if (serial) {
-            async.eachSeries(data, iterator, done);
+            async.eachSeries(nodes, iterator, done);
         } else {
-            async.each(data, iterator, done);
+            async.each(nodes, iterator, done);
         }
     });
 };
 
 /**
  * Send a request to cloud provider for getting the status of a server
- * 
+ *
  * @param options {Object} plugin configurations
  * @param serverId {String} Server Id of the requested VM
  * @param callback {Function} callback to fire after getting server's detail
  */
-module.exports.queryNode = function(options, serverId, callback){
+module.exports.queryNode = function (options, serverId, callback) {
     var client = pkgcloud.compute.createClient(options.pkgcloud.client);
-    client.getServer(serverId, function(err, node){
-        if(!err){
+    client.getServer(serverId, function (err, node) {
+        if (!err) {
+            node = exports.preProcessNodeData.call(options, node);
             callback(node);
         }
     });
@@ -271,3 +242,26 @@ module.exports.nodeType = function (nodeName) {
     return nodeName.split("-")[1];
 };
 
+module.exports.preProcessNodeData = function (node) {
+    var _node = {}
+    _node.id = node.id ? node.id : "";
+    _node.name = node.name ? node.name : "";
+    _node.address = _.keys(node.addresses).length > 0 ? _.keys(node.original.addresses)[0] + ":" + node.addresses.public[0] : "";
+    _node.ipv4 = _.keys(node.addresses).length > 0 ? node.addresses.public[0] :"";
+    _node.type = node.name ? module.exports.nodeType(node.name) : "";
+    _node.status = node.status ? node.status : "";
+    var filteredNodeOptions = _.filter(this.nodetypes, function (nodetype) {
+        return nodetype.name === node.name ? module.exports.nodeType(_node.name) : "";
+    });
+    var nodeOption = filteredNodeOptions.length > 0 ? filteredNodeOptions[0] : undefined;
+    if (nodeOption) {
+        _node.nodeOption = nodeOption;
+        _node.docker = {
+            protocol: this.docker.client.protocol,
+            host: node.ipv4,
+            port: this.docker.client.port,
+            auth: this.docker.client.auth
+        }
+    }
+    return _node;
+}

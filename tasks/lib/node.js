@@ -79,12 +79,11 @@ node.list = function (grunt, options, done) {
     var nodeTupleList = [];
     var iterator = function (node, iterationDone) {
         nodeTuple = [];
-        var hostId = node.host.id
-        var hostName = node.host.name;
-        var hostAddress = node.host.address;
-        var hostStatus = node.host.status.toUpperCase();
-        hostStatus = changeStatusColor(hostStatus);
-        nodeTuple.push(hostId, hostName, hostAddress, hostStatus);
+        var hostId = node.id
+        var hostName = node.name;
+        var hostAddress = node.address;
+        var hostStatus = node.status.toUpperCase();
+        nodeTuple.push(hostId, hostName, hostAddress, changeStatusColor(hostStatus));
         nodeTupleList.push(nodeTuple);
         return iterationDone();
     };
@@ -118,7 +117,7 @@ node.destroy = function (grunt, options, done) {
             grunt.log.ok("Started deleting nodes...");
             var iterator = function (node, iterationDone) {
                 var client = pkgcloud.compute.createClient(options.pkgcloud.client);
-                client.destroyServer(node.host.id, function (err, result) {
+                client.destroyServer(node.id, function (err, result) {
                     utils.handleErr(err, iterationDone, true);
                     grunt.log.ok("Deleted node: " + result.ok);
                     return iterationDone();
