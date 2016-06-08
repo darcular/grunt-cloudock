@@ -52,19 +52,19 @@ module.exports.logErrMsg = function (err) {
  *          iterator The function is passed an Object containing the security
  *          group parameters, and a callback function to call when one iteration
  *          is complete (the callback is, if in error, sent an error object)
- * @param done {Function}
+ * @param iteratorStopped {Function}
  *          done Callback to call when the requests are completed (an err
  *          parameter is passed if an error occurred)
  */
-module.exports.iterateOverSecurityGroups = function (options, selector, iterator, done) {
+var iterateOverSecurityGroups = function (options, selector, iterator, iteratorStopped) {
     // Retrieves the active security groups
     var pkgcloudClient = pkgcloud.network.createClient(options.pkgcloud.client);
     var callback = function (err, activeGroups) {
         if (err) {
             module.exports.logErrMsg(err);
-            return done(err);
+            return iteratorStopped(err);
         }
-        async.eachSeries(_.filter(activeGroups, selector), iterator, done);
+        async.eachSeries(_.filter(activeGroups, selector), iterator, iteratorStopped);
     };
     pkgcloudClient.getSecurityGroups(null, callback);
 };
@@ -79,16 +79,16 @@ module.exports.iterateOverSecurityGroups = function (options, selector, iterator
  *          iterator The function is passed an Object containing the security
  *          group parameters, and a callback function to call when one iteration
  *          is complete (the callback is, if in error, sent an error object)
- * @param done {Function}
+ * @param iteratorStopped {Function}
  *          done Callback to call when the requests are completed (an err
  *          parameter is passed if an error occurred)
  *
  */
-module.exports.iterateOverClusterSecurityGroups = function (options, iterator, done) {
+module.exports.iterateOverClusterSecurityGroups = function (options, iterator, iteratorStopped) {
     var selector = function (sec) {
         return module.exports.securitygroupCluster(sec.name) === options.cluster
     };
-    module.exports.iterateOverSecurityGroups(options, selector, iterator, done);
+    iterateOverSecurityGroups(options, selector, iterator, iteratorStopped);
 };
 
 /**
