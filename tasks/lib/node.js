@@ -12,10 +12,9 @@ node.create = function (grunt, options, done) {
     grunt.log.ok("Started creating node...");
     var client = pkgcloud.compute.createClient(options.pkgcloud.client);
     var nodes = {};
-    var tableUpdate = setInterval(function () {
+    var tableUpdater = setInterval(function () {
         logUpdate(composeNodesTable(_.toArray(nodes)));
     }, 1000);
-
     var iterator = function (node, iterationDone) {
         var serverConfig = {
             tenantId: options.pkgcloud.client.tenantName,
@@ -29,7 +28,7 @@ node.create = function (grunt, options, done) {
         };
         client.createServer(serverConfig, function (err, result) {
             utils.handleErr(err, iterationDone, true);
-            var tupleUpdate = setInterval(function () {
+            var updateTuple = function() {
                 utils.queryNode(options, result.id, function (node) {
                     var nodeTuple = [];
                     var hostId = node.id ? node.id : "";
@@ -38,22 +37,24 @@ node.create = function (grunt, options, done) {
                     var hostStatus = node.status ? node.status.toUpperCase() : "";
                     nodeTuple.push(hostId, hostName, hostAddress, changeStatusColor(hostStatus));
                     nodes[hostId] = nodeTuple;
-                    if (hostStatus == "RUNNING") {
-                        clearInterval(tupleUpdate);
+                    if (hostStatus == "RUNNING"){
+                        clearInterval(tupleUpdater);
                         return iterationDone();
                     }
-                })
-            }, 3000);
+                });
+            };
+            updateTuple();
+            var tupleUpdater = setInterval(updateTuple, 3000);
             setTimeout(function () {
-                if(tupleUpdate._repeat){
-                    clearInterval(tupleUpdate);
+                if(tupleUpdater._repeat){
+                    clearInterval(tupleUpdater);
                     iterationDone();
                 }
             }, 60000);
         });
     };
     var iteratorStopped = function (err) {
-        clearInterval(tableUpdate);
+        clearInterval(tableUpdater);
         logUpdate(composeNodesTable(_.toArray(nodes)));
         logUpdate.done();
         grunt.log.ok("Done creating node.");
