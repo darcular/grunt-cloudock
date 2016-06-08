@@ -1,14 +1,14 @@
 /**
  * @author Yikai Gong
  */
-var pkgcloud = require("pkgcloud"), async = require("async");
-var utils = require("../../utils/utils");
+var _ = require('underscore'), async = require("async");
+var exec = require('child_process').exec, pkgcloud = require("pkgcloud");
 var logUpdate = require('log-update');
-var _ = require('underscore');
+var utils = require("../../utils/utils");
 
 var node = {};
 
-node.create = function (grunt, options, done) {
+node.create = function (grunt, options, gruntDone) {
     grunt.log.ok("Started creating node...");
     var client = pkgcloud.compute.createClient(options.pkgcloud.client);
     var nodes = {};
@@ -31,7 +31,7 @@ node.create = function (grunt, options, done) {
             var updateTuple = function () {
                 utils.queryNode(options, result.id, function (node) {
                     var nodeTuple = [];
-                    var hostId = node.id.substr(0, 5)+"..";
+                    var hostId = node.id.substr(0, 5) + "..";
                     var hostName = node.name;
                     var hostAddress = node.address;
                     var hostStatus = node.status.toUpperCase();
@@ -58,9 +58,9 @@ node.create = function (grunt, options, done) {
         logUpdate(composeNodesTable(_.toArray(nodes)));
         logUpdate.done();
         grunt.log.ok("Done creating node.");
-        utils.handleErr(err, done, false);
-        done();
-    }
+        utils.handleErr(err, gruntDone, false);
+        return gruntDone();
+    };
     async.each(utils.getDefinedNodes(options), iterator, iteratorStopped);
 };
 node.create.description = "Create node VMs of cluster";
@@ -68,17 +68,17 @@ node.create.description = "Create node VMs of cluster";
 /**
  * List all the nodes in the cluster
  *
- * @param {Object}
+ * @param {Object} grunt
  *          grunt The Grunt instance
- * @param {Object}
+ * @param {Object} options
  *          options The task parameters
- * @param {Function}
+ * @param {Function} gruntDone
  *          done Callback to call when the requests are completed
  */
-node.list = function (grunt, options, done) {
+node.list = function (grunt, options, gruntDone) {
     var nodeTupleList = [];
     var iterator = function (node, iterationDone) {
-        nodeTuple = [];
+        var nodeTuple = [];
         var hostId = node.id.substr(0, 5) + "..";
         var hostName = node.name;
         var hostAddress = node.address;
@@ -88,11 +88,11 @@ node.list = function (grunt, options, done) {
         return iterationDone();
     };
     var iteratorStopped = function (err) {
-        utils.handleErr(err, done, false);
+        utils.handleErr(err, gruntDone, false);
         console.log(composeNodesTable(nodeTupleList));
-        return done();
-    }
-    utils.iterateOverClusterNodes(options, undefined, iterator, iteratorStopped, true);
+        return gruntDone();
+    };
+    utils.iterateOverClusterNodes(options, "", iterator, iteratorStopped, true);
 };
 node.list.description = "List nodes of cluster";
 
@@ -101,19 +101,26 @@ node.list.description = "List nodes of cluster";
  * deleted are found by their names (a compistion of servertypes.name, an hypen,
  * and a progressive number.
  *
- * @param {Object}
+ * @param {Object} grunt
  *          grunt The Grunt instance
- * @param {Object}
+ * @param {Object} options
  *          options Task options
- * @param {Function}
+ * @param {Function} gruntDone
  *          done Callback to call when the request is completed
  */
-node.destroy = function (grunt, options, done) {
-    async.series([
-        function (startDestroy) {
-            promptBeforeDestroy(done, startDestroy);
+node.destroy = function (grunt, options, gruntDone) {
+    async.waterfall([
+        // First: Get user confirm
+        function (next) {
+            promptBeforeDestroy(function (comfirmed) {
+                return next(null, comfirmed);
+            });
         },
-        function () {
+        // Second: delete nodes based on user's confirm
+        function (confirm, next) {
+            if (!confirm) {
+                return next(new Error("User Aborted"));
+            }
             grunt.log.ok("Started deleting nodes...");
             var iterator = function (node, iterationDone) {
                 var client = pkgcloud.compute.createClient(options.pkgcloud.client);
@@ -123,18 +130,75 @@ node.destroy = function (grunt, options, done) {
                     return iterationDone();
                 });
             };
-            var callback = function (err) {
-                grunt.log.ok("Done deleting nodes.");
-                if (err) {
-                    return done(err);
-                }
-                done();
-            }
-            utils.iterateOverClusterNodes(options, null, iterator, callback, false);
+            var iteratorStopped = function (err) {
+                return next(err);
+            };
+            utils.iterateOverClusterNodes(options, null, iterator, iteratorStopped, false);
         }
-    ])
+    ], function (err) {
+        utils.handleErr(err, gruntDone, false);
+        grunt.log.ok("Done deleting nodes.");
+        return gruntDone();
+    })
 };
 node.destroy.description = "Destroy node VMs of cluster";
+
+/**
+ * Add all hosts in the cluster to the /etc/hosts of every ACTIVE node
+ *
+ * @param {Object} grunt
+ *          grunt The Grunt instance
+ * @param {Object} options
+ *          options The task parameters
+ * @param {Function} gruntDone
+ *          done Callback to call when the requests are completed
+ */
+node.dns = function (grunt, options, gruntDone) {
+    // Check configuration file
+    try {
+        var username = options.pkgcloud.client.sshusername;
+    } catch (err) {
+        grunt.fail.warn("user name for ssh has not been defined");
+        return gruntDone(err);
+    }
+    grunt.log.ok("Started updating /etc/hosts file on each ACTIVE node ...");
+    // Serial Asynchronous works start
+    async.waterfall([
+        // Get cluster nodes's ip-name pair
+        function (next) {
+            var hosts = [];
+            var iterator = function (node, iterationDone) {
+                hosts.push(node.ipv4 + " " + node.name);
+                return iterationDone();
+            };
+            var iteratorStopped = function (err) {
+                utils.handleErr(err, next, false);
+                return next(null, hosts);
+            };
+            utils.iterateOverClusterNodes(options, "", iterator, iteratorStopped, true);
+        },
+        // Edit hosts file on each ALIVE node
+        function (hosts, next) {
+            var iterator = function (node, iterationDone) {
+                var contentToAppend = hosts.join("\n") + "\n";
+                var cmdStr = "'sudo echo \"" + contentToAppend + "\" | cat - /etc/hosts > temp && sudo mv temp /etc/hosts'";
+                sshExec(username, node.ipv4, cmdStr, function (err) {
+                    utils.handleErr(err, iterationDone, true);
+                    grunt.log.ok("Done appending hosts to " + node.name);
+                    return iterationDone();
+                });
+            };
+            var iteratorStopped = function (err) {
+                utils.handleErr(err, next, false);
+            };
+            utils.iterateOverClusterNodes(options, "active", iterator, iteratorStopped, false)
+
+        }
+    ], function (err) {
+        utils.handleErr(err, gruntDone, false);
+        return gruntDone();
+    });
+};
 
 module.exports.node = node;
 
@@ -173,15 +237,20 @@ function changeStatusColor(hostStatus) {
     return hostStatus;
 }
 
-function promptBeforeDestroy(done, startDestroy) {
+function promptBeforeDestroy(callback) {
     var rl = require("readline").createInterface({
         input: process.stdin,
         output: process.stdout
     });
     rl.question("Going to destroy all cluster nodes. Are you sure? (y/N)", function (answer) {
         if (!(answer.toUpperCase() == "Y" || answer.toUpperCase() == "YES")) {
-            return done();
+            return callback(false);
+        } else {
+            return callback(true);
         }
-        startDestroy();
     })
+}
+
+function sshExec(username, address, cmd, callback) {
+    exec(["ssh", username + "@" + address, "-C"].concat(cmd).join(" "), callback);
 }

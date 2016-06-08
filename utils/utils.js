@@ -19,7 +19,9 @@ var _ = require("underscore");
  */
 module.exports.handleErr = function (err, done, ignoreErr) {
     if (err) {
-        require("grunt").log.error(err.message + " " + JSON.stringify(err.result));
+        var message = err.message ? err.message : "Unknown error.";
+        var result = err.result ? JSON.stringify(err.result) : ""
+        require("grunt").log.error(message + " Result:" + result);
         if (ignoreErr) {
             return done();
         } else {
@@ -168,13 +170,13 @@ module.exports.getDefinedNodes = function (options) {
  *          iterator The function is passed an Object containing the iterator
  *          parameters, and a callback function to call when one iteration is
  *          complete (the callback is, if in error, sent an error object)
- * @param done {Function}
+ * @param iteratorStopped {Function}
  *          done Callback to call when the requests are completed (an err
  *          parameter is passed if an error occurred)
  * @param serial {Boolean}
  *          If using serial iteration
  */
-module.exports.iterateOverClusterNodes = function (options, status, iterator, done, serial) {
+module.exports.iterateOverClusterNodes = function (options, status, iterator, iteratorStopped, serial) {
     var client = pkgcloud.compute.createClient(options.pkgcloud.client);
     // Retrieves the active nodes IP addresses
     var queryOpt = {name: options.cluster};
@@ -183,15 +185,14 @@ module.exports.iterateOverClusterNodes = function (options, status, iterator, do
         queryOpt.status = status;
     }
     client.getServers(queryOpt, function (err, nodes) {
-        module.exports.handleErr(err, done, false);
+        module.exports.handleErr(err, iteratorStopped, false);
         // Extracts some data about the selected nodes and puts them back intonodes
-        module.exports.preProcessNodeData.bind(options);
         nodes = _.map(nodes, module.exports.preProcessNodeData.bind(options));
         // Calls the iterator for all the elements in data
         if (serial) {
-            async.eachSeries(nodes, iterator, done);
+            return async.eachSeries(nodes, iterator, iteratorStopped);
         } else {
-            async.each(nodes, iterator, done);
+            return async.each(nodes, iterator, iteratorStopped);
         }
     });
 };
@@ -246,7 +247,7 @@ module.exports.preProcessNodeData = function (node) {
     var _node = {}
     _node.id = node.id ? node.id : "";
     _node.name = node.name ? node.name : "";
-    _node.address = _.keys(node.addresses).length > 0 ? _.keys(node.original.addresses)[0] + ":" + node.addresses.public[0] : "";
+    _node.address = _.keys(node.addresses).length > 0 ? _.keys(node.original.addresses)[0] + ": " + node.addresses.public[0] : "";
     _node.ipv4 = _.keys(node.addresses).length > 0 ? node.addresses.public[0] :"";
     _node.type = node.name ? module.exports.nodeType(node.name) : "";
     _node.status = node.status ? node.status : "";
