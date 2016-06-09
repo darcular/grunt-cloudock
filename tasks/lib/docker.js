@@ -54,7 +54,7 @@ docker.pull = function (grunt, options, gruntDone) {
                         if (jsonData && jsonData.error) {
                             stream.emit("error", jsonData.error);
                         }
-                        progressLines[image.node.id] = image.node.name + ": " + jsonData.status +" "+ jsonData.progress;
+                        progressLines[image.node.id] = image.node.name + ": " + jsonData.status + " " + jsonData.progress;
                         logUpdate(_.toArray(progressLines).join("\n"));
                     } catch (err) {
                         // grunt.log.error("Warning pulling image: " + err.message);
@@ -333,9 +333,9 @@ docker.stop = function (grunt, options, gruntDone) {
             + "  on node " + container.node.name);
         (new Docker(container.node.docker)).getContainer(container.container.Id)
             .stop({}, function (err, data) {
-                if (err){
+                if (err) {
                     return utils.handleErr(err, next, true);
-                }else{
+                } else {
                     return next();
                 }
             });
@@ -433,8 +433,26 @@ docker.rmi = function (grunt, options, gruntDone) {
     });
 };
 
-docker.images = function(grunt, options, gruntDone){
-
+docker.images = function (grunt, options, gruntDone) {
+    var images = {};  // {nodeId}
+    var nodeIterator = function (node, next) {
+        grunt.log.ok(node.name + " " + node.address + ":");
+        (new Docker(node.docker)).listImages(null, function (err, imageList) {
+            if (err)
+                return utils.handleErr(err, next, true);
+            if (imageList.length > 0) {
+                imageList.forEach(function (image) {
+                    grunt.log.ok(image.RepoTags[0]+" Built on "+ new Date(image.Created));
+                })
+            }
+            grunt.log.ok(" ");
+            return next();
+        })
+    };
+    var iteratorStopped = function (err) {
+        gruntDone();
+    };
+    utils.iterateOverClusterNodes(options, "ACTIVE", nodeIterator, iteratorStopped, true);
 }
 
 /**
