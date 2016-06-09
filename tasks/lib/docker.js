@@ -27,6 +27,10 @@ module.exports.docker = docker;
 docker.pull = function (grunt, options, gruntDone) {
     grunt.log.ok("Started pulling images.");
     var progressLines = {};
+    var progressUpdater = setInterval(function (){
+        if (!_.isEmpty(progressLines))
+            logUpdate(_.toArray(progressLines).join("\n"));
+    },1);
     utils.iterateOverClusterImages(
         grunt,
         options,
@@ -55,7 +59,6 @@ docker.pull = function (grunt, options, gruntDone) {
                             stream.emit("error", jsonData.error);
                         }
                         progressLines[image.node.id] = image.node.name + ": " + jsonData.status + " " + jsonData.progress;
-                        logUpdate(_.toArray(progressLines).join("\n"));
                     } catch (err) {
                         // grunt.log.error("Warning pulling image: " + err.message);
                     }
@@ -71,11 +74,12 @@ docker.pull = function (grunt, options, gruntDone) {
             }, image.auth);
 
         }, function (err) {
+            clearInterval(progressUpdater);
             if (err) {
                 return gruntDone(err);
             }
             grunt.log.ok("Done pulling images.");
-            gruntDone();
+            return gruntDone();
         }, false);
 };
 
