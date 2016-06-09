@@ -13,7 +13,7 @@ node.create = function (grunt, options, gruntDone) {
     var client = pkgcloud.compute.createClient(options.pkgcloud.client);
     var nodes = {};
     var tableUpdater = setInterval(function () {
-        logUpdate(composeNodesTable(_.toArray(nodes)));
+        logUpdate(composeNodesTable(nodes));
     }, 1000);
     var iterator = function (node, iterationDone) {
         var serverConfig = {
@@ -29,38 +29,47 @@ node.create = function (grunt, options, gruntDone) {
         client.createServer(serverConfig, function (err, result) {
             if (err)
                 return utils.handleErr(err, iterationDone, false);
-            var updateTuple = function () {
+            var created = false;
+            var updateTuple = function (callback) {
                 utils.queryNode(options, result.id, function (err, node) {
-                    if(err){
+                    if (err) {
                         return utils.handleErr(err, iterationDone, true);
                     }
-                    var nodeTuple = [];
-                    var hostId = node.id.substr(0, 5) + "..";
-                    var hostName = node.name;
-                    var hostAddress = node.address;
+                    var nodeTuple = {};
+                    nodeTuple.hostId = node.id.substr(0, 5) + "..";
+                    nodeTuple.hostName = node.name;
+                    nodeTuple.hostAddress = node.address;
                     var hostStatus = node.status.toUpperCase();
-                    nodeTuple.push(hostId, hostName, hostAddress, changeStatusColor(hostStatus));
-                    nodes[hostId] = nodeTuple;
+                    nodeTuple.hostStatus = changeStatusColor(hostStatus);
+                    nodes[nodeTuple.hostId] = nodeTuple;
                     if (hostStatus == "RUNNING") {
-                        clearInterval(tupleUpdater);
-                        clearTimeout(timeout);
-                        return iterationDone();
+                        created = true;
+                    } else{
+                        created = false;
                     }
+                    return callback();
                 });
             };
-            updateTuple();
-            var tupleUpdater = setInterval(updateTuple, 3000);
-            var timeout = setTimeout(function () {
-                if (tupleUpdater._repeat) {
-                    clearInterval(tupleUpdater);
-                    return iterationDone();
+            async.until(
+                function () {
+                    return created
+                },
+                function (callback) {
+                    setTimeout(function(){
+                        return updateTuple(callback);
+                    },3000)
+                },
+                function (err) {
+                    return err ?
+                        utils.handleErr(err, iterationDone, false) :
+                        iterationDone();
                 }
-            }, 240000);
+            );
         });
     };
     var iteratorStopped = function (err) {
         clearInterval(tableUpdater);
-        logUpdate(composeNodesTable(_.toArray(nodes)));
+        logUpdate(composeNodesTable(nodes));
         logUpdate.done();
         if (err)
             return utils.handleErr(err, gruntDone, false);
@@ -82,21 +91,21 @@ node.create.description = "Create node VMs of cluster";
  *          done Callback to call when the requests are completed
  */
 node.list = function (grunt, options, gruntDone) {
-    var nodeTupleList = [];
+    var nodes = {};
     var iterator = function (node, iterationDone) {
-        var nodeTuple = [];
-        var hostId = node.id.substr(0, 5) + "..";
-        var hostName = node.name;
-        var hostAddress = node.address;
+        var nodeTuple = {};
+        nodeTuple.hostId = node.id.substr(0, 5) + "..";
+        nodeTuple.hostName = node.name;
+        nodeTuple.hostAddress = node.address;
         var hostStatus = node.status.toUpperCase();
-        nodeTuple.push(hostId, hostName, hostAddress, changeStatusColor(hostStatus));
-        nodeTupleList.push(nodeTuple);
+        nodeTuple.hostStatus = changeStatusColor(hostStatus);
+        nodes[nodeTuple.hostId] = nodeTuple;
         return iterationDone();
     };
     var iteratorStopped = function (err) {
         if (err)
             return utils.handleErr(err, gruntDone, false);
-        console.log(composeNodesTable(nodeTupleList));
+        console.log(composeNodesTable(nodes));
         return gruntDone();
     };
     utils.iterateOverClusterNodes(options, "", iterator, iteratorStopped, true);
@@ -134,24 +143,30 @@ node.destroy = function (grunt, options, gruntDone) {
                 client.destroyServer(node.id, function (err, result) {
                     if (err)
                         return utils.handleErr(err, iterationDone, true);
-                    //TODO check until nodes is removed
-                    var checkDelection = function(){
-                        utils.queryNode(options, node.id, function (err, node) {
-                            if(err && err.statusCode == 404){
+                    var deleted = false;
+                    async.until(
+                        function () {
+                            return deleted
+                        },
+                        function (callback) {
+                            utils.queryNode(options, node.id, function (err, node) {
+                                if (err && err.statusCode == 404) {
+                                    deleted = true;
+                                    return callback();
+                                } else {
+                                    return callback(err);
+                                }
+                            });
+                        },
+                        function (err) {
+                            if (err) {
+                                return  utils.handleErr(err, iterationDone, false);
+                            }else{
                                 grunt.log.ok("Deleted node: " + result.ok);
-                                clearInterval(checkDelection);
-                                clearTimeout(timeout);
                                 return iterationDone();
                             }
-                        });
-                    };
-                    var deletionChecker = setInterval(checkDelection, 3000);
-                    var timeout = setTimeout(function(){
-                        if(tupleUpdater._repeat){
-                            clearInterval(deletionChecker);
-                            return iterationDone(new Error("Deletion Time out"));
                         }
-                    },240000)
+                    );
                 });
             };
             var iteratorStopped = function (err) {
@@ -224,7 +239,12 @@ node.dns = function (grunt, options, gruntDone) {
 
 module.exports.node = node;
 
-function composeNodesTable(nodeTupleList) {
+function composeNodesTable(nodes) {
+    var nodesList = _.toArray(nodes);
+    var sortedNodesList = _.sortBy(nodesList, "hostName");
+    var nodePutleList = _.map(sortedNodesList, function(nodeTuple){
+        return _.toArray(nodeTuple);
+    })
     var Table = require('cli-table');
     var table = new Table({
         head: ['Id'.cyan, 'Name'.cyan, 'Zone:Ipv4'.cyan, 'Status'.cyan],
@@ -237,7 +257,7 @@ function composeNodesTable(nodeTupleList) {
             , 'right': '║', 'right-mid': '╢', 'middle': '│'
         }
     });
-    table.push.apply(table, nodeTupleList);
+    table.push.apply(table, nodePutleList);
     return table.toString();
 }
 
