@@ -1,7 +1,7 @@
 {
   "name": "grunt-cloudock",
   "description": "A Grunt plugin to manage dockers on clusters using dockerode and pkgcloud.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
   "author": {
     "name": "Yikai Gong",
