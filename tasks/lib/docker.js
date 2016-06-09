@@ -30,7 +30,7 @@ docker.pull = function (grunt, options, gruntDone) {
     var progressUpdater = setInterval(function (){
         if (!_.isEmpty(progressLines))
             logUpdate(_.toArray(progressLines).join("\n"));
-    },1);
+    },200);
     utils.iterateOverClusterImages(
         grunt,
         options,
