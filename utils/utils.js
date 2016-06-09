@@ -221,8 +221,9 @@ module.exports.queryNode = function (options, serverId, callback) {
     client.getServer(serverId, function (err, node) {
         if (!err) {
             node = exports.preProcessNodeData.call(options, node);
-            callback(node);
-        }
+            callback(null, node);
+        }else
+            callback(err);
     });
 }
 

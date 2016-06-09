@@ -30,7 +30,10 @@ node.create = function (grunt, options, gruntDone) {
             if (err)
                 return utils.handleErr(err, iterationDone, false);
             var updateTuple = function () {
-                utils.queryNode(options, result.id, function (node) {
+                utils.queryNode(options, result.id, function (err, node) {
+                    if(err){
+                        return utils.handleErr(err, iterationDone, true);
+                    }
                     var nodeTuple = [];
                     var hostId = node.id.substr(0, 5) + "..";
                     var hostName = node.name;
@@ -40,13 +43,14 @@ node.create = function (grunt, options, gruntDone) {
                     nodes[hostId] = nodeTuple;
                     if (hostStatus == "RUNNING") {
                         clearInterval(tupleUpdater);
+                        clearTimeout(timeout);
                         return iterationDone();
                     }
                 });
             };
             updateTuple();
             var tupleUpdater = setInterval(updateTuple, 3000);
-            setTimeout(function () {
+            var timeout = setTimeout(function () {
                 if (tupleUpdater._repeat) {
                     clearInterval(tupleUpdater);
                     return iterationDone();
@@ -130,8 +134,24 @@ node.destroy = function (grunt, options, gruntDone) {
                 client.destroyServer(node.id, function (err, result) {
                     if (err)
                         return utils.handleErr(err, iterationDone, true);
-                    grunt.log.ok("Deleted node: " + result.ok);
-                    return iterationDone();
+                    //TODO check until nodes is removed
+                    var checkDelection = function(){
+                        utils.queryNode(options, node.id, function (err, node) {
+                            if(err && err.statusCode == 404){
+                                grunt.log.ok("Deleted node: " + result.ok);
+                                clearInterval(checkDelection);
+                                clearTimeout(timeout);
+                                return iterationDone();
+                            }
+                        });
+                    };
+                    var deletionChecker = setInterval(checkDelection, 3000);
+                    var timeout = setTimeout(function(){
+                        if(tupleUpdater._repeat){
+                            clearInterval(deletionChecker);
+                            return iterationDone(new Error("Deletion Time out"));
+                        }
+                    },240000)
                 });
             };
             var iteratorStopped = function (err) {
