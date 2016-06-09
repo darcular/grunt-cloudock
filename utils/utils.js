@@ -5,7 +5,7 @@
 "use strict";
 
 var pkgcloud = require("pkgcloud"), _ = require("underscore"), async = require("async");
-var _ = require("underscore");
+var _ = require("underscore"), Docker = require("dockerode");
 
 /**
  * Logs an error (if existing) on the Grunt error log, and calls the callback with or
@@ -20,7 +20,7 @@ var _ = require("underscore");
 module.exports.handleErr = function (err, done, ignoreErr) {
     if (err) {
         var message = err.message ? err.message : "Unknown error.";
-        var result = err.result ? JSON.stringify(err.result) : ""
+        var result = err.result ? JSON.stringify(err.result) : "";
         require("grunt").log.error(message + " Result:" + result);
         if (ignoreErr) {
             return done();
@@ -264,7 +264,7 @@ module.exports.preProcessNodeData = function (node) {
     _node.type = node.name ? module.exports.nodeType(node.name) : "";
     _node.status = node.status ? node.status : "";
     var filteredNodeOptions = _.filter(this.nodetypes, function (nodetype) {
-        return nodetype.name === node.name ? module.exports.nodeType(_node.name) : "";
+        return nodetype.name === module.exports.nodeType(_node.name)
     });
     var nodeOption = filteredNodeOptions.length > 0 ? filteredNodeOptions[0] : undefined;
     var images = filteredNodeOptions.length > 0 ? filteredNodeOptions[0].images : [];
@@ -273,7 +273,7 @@ module.exports.preProcessNodeData = function (node) {
         _node.images = images;
         _node.docker = {
             protocol: this.docker.client.protocol,
-            host: node.ipv4,
+            host: _node.ipv4,
             port: this.docker.client.port,
             auth: this.docker.client.auth
         }
@@ -323,7 +323,7 @@ module.exports.iterateOverClusterImages = function (grunt, options, iterator, it
             });
             nodePulls = _.filter(nodePulls, function (image) {
                 return node.nodeOption.images.indexOf(image.name) >= 0;
-            })
+            });
             async.eachSeries(nodePulls, iterator, function (err) {
                 // FIXME May need handle err
                 callback();
@@ -375,7 +375,9 @@ module.exports.iterateOverClusterContainers = function (grunt, options, iterator
                 }
                 done();
             });
-        });
+        },
+        true
+    );
 };
 
 /**
@@ -397,6 +399,7 @@ module.exports.iterateOverClusterContainers = function (grunt, options, iterator
  *
  * @returns {String} Name of cluster
  */
+// TODO 
 module.exports.isContainerToBeProcessed = function (grunt, nodeType, nodeId, imageName, containerId) {
     return (!grunt.option("nodetype") && !grunt.option("containerid") && !grunt
             .option("nodeid"))
@@ -430,11 +433,11 @@ module.exports.iterateOverClusterDockerImages = function (grunt, options,
 
     // Iterates over all the nodes in the cluster and
     // puts in images data about the images storing on the current node
-    var images = [];
     module.exports.iterateOverClusterNodes(
         options,
         "ACTIVE",
         function (node, next) {
+            var images = [];
             (new Docker(node.docker)).listImages({}, function (err, nodeImages) {
                 if (err) {
                     grunt.log.error(err);
@@ -447,6 +450,13 @@ module.exports.iterateOverClusterDockerImages = function (grunt, options,
                         image: image
                     });
                 });
+                // For every image executes the iterator function and skips errors
+                async.eachSeries(images, iterator, function (err) {
+                    if (err) {
+                        grunt.log.error(err);
+                    }
+                    done();
+                });
 
                 next();
             });
@@ -456,13 +466,7 @@ module.exports.iterateOverClusterDockerImages = function (grunt, options,
                 grunt.log.error(err);
                 return done(err);
             }
-            // For every image executes the iterator function and skips errors
-            async.eachSeries(images, iterator, function (err) {
-                if (err) {
-                    grunt.log.error(err);
-                }
-                done();
-            });
+
         },
         false
     );

@@ -8,6 +8,7 @@ var pkgcloud = require("pkgcloud"), _ = require("underscore");
 var async = require("async");
 var Docker = require("dockerode"), querystring = require("querystring");
 var utils = require("../../utils/utils");
+var logUpdate = require('log-update');
 
 var docker = {};
 module.exports.docker = docker;
@@ -25,6 +26,7 @@ module.exports.docker = docker;
  */
 docker.pull = function (grunt, options, gruntDone) {
     grunt.log.ok("Started pulling images.");
+    var progressLines = {};
     utils.iterateOverClusterImages(
         grunt,
         options,
@@ -36,7 +38,6 @@ docker.pull = function (grunt, options, gruntDone) {
                 if (err) {
                     return next(err);
                 }
-
                 stream.setEncoding("utf8");
 
                 stream.on("error", function (err) {
@@ -53,12 +54,16 @@ docker.pull = function (grunt, options, gruntDone) {
                         if (jsonData && jsonData.error) {
                             stream.emit("error", jsonData.error);
                         }
+                        progressLines[image.node.id] = image.node.name + ": " + jsonData.status +" "+ jsonData.progress;
+                        logUpdate(_.toArray(progressLines).join("\n"));
                     } catch (err) {
-                        grunt.log.error("Warning pulling image: " + err.message);
+                        // grunt.log.error("Warning pulling image: " + err.message);
                     }
                 });
 
                 stream.on("end", function () {
+                    logUpdate.clear()
+                    logUpdate.done();
                     grunt.log.ok("Done pulling image " + image.name + " on node "
                         + image.node.name);
                     next();
@@ -149,8 +154,8 @@ docker.run = function (grunt, options, done) {
         var streamo = (new Docker(image.node.docker)).run(image.repo,
             image.options.run.cmd, null, createOptions, image.options.run.start,
             function (err, data, container) {
-                utils.dealWithError(err, function (err) {
-                });
+                utils.handleErr(err, function (err) {
+                }, true);
             });
 
         streamo.on("error", function (err) {
@@ -173,8 +178,8 @@ docker.run = function (grunt, options, done) {
                 function (err, data) {
                     // This error is ignored, since it will raised in the vast majority
                     // of cases, since the container has started already
-                    utils.dealWithError(err, function (err) {
-                    });
+                    utils.handleErr(err, function (err) {
+                    }, true);
                     grunt.log.ok("Completed creating and running the container "
                         + container.id + " from image " + image.name + " on node "
                         + image.node.name);
@@ -229,8 +234,7 @@ docker.run = function (grunt, options, done) {
  * @param {Function}
  *          done Callback to call when the requests are completed
  */
-docker.ps = function (grunt, options, done) {
-
+docker.ps = function (grunt, options, gruntDone) {
     /*
      * Function to prints information on a container
      */
@@ -246,9 +250,9 @@ docker.ps = function (grunt, options, done) {
     utils.iterateOverClusterContainers(grunt, options, listIterator,
         function (err) {
             if (err) {
-                return done(err);
+                return gruntDone(err);
             }
-            done();
+            gruntDone();
         }
     );
 };
@@ -263,7 +267,7 @@ docker.ps = function (grunt, options, done) {
  * @param {Function}
  *          done Callback to call when the requests are completed
  */
-docker.start = function (grunt, options, done) {
+docker.start = function (grunt, options, gruntDone) {
 
     /*
      * Function to start a container
@@ -275,9 +279,11 @@ docker.start = function (grunt, options, done) {
                 container.container.Id)) {
             return next();
         }
-
-        grunt.log.ok("Started starting container " + container.container.Id
-            + "  on node " + container.node.address);
+        var containerId = container.container.Id;
+        var containerName = container.container.Names[0];
+        var containerImage = container.container.Image;
+        grunt.log.ok("Started starting container " + containerId + containerName
+            + "  on node " + container.node.name);
         (new Docker(container.node.docker)).getContainer(container.container.Id)
             .start({}, function (err, data) {
                 utils.handleErr(err, function (err) {
@@ -289,10 +295,10 @@ docker.start = function (grunt, options, done) {
     grunt.log.ok("Started starting containers");
 
     utils.iterateOverClusterContainers(grunt, options, startIterator, function (err) {
-        utils.dealWithError(err, function (err) {
-        });
+        utils.handleErr(err, function (err) {
+        }, true);
         grunt.log.ok("Completed starting containers");
-        done();
+        gruntDone();
     });
 
 };
@@ -307,7 +313,7 @@ docker.start = function (grunt, options, done) {
  * @param {Function}
  *          done Callback to call when the requests are completed
  */
-docker.stop = function (grunt, options, done) {
+docker.stop = function (grunt, options, gruntDone) {
 
     /*
      * Function to stop a container
@@ -319,14 +325,19 @@ docker.stop = function (grunt, options, done) {
                 container.container.Id)) {
             return next();
         }
+        var containerId = container.container.Id;
+        var containerName = container.container.Names[0];
+        var containerImage = container.container.Image;
 
-        grunt.log.ok("Started stopping container " + container.container.Id
-            + "  on node " + container.node.address);
+        grunt.log.ok("Started stopping container " + containerId + containerName
+            + "  on node " + container.node.name);
         (new Docker(container.node.docker)).getContainer(container.container.Id)
             .stop({}, function (err, data) {
-                utils.dealWithError(err, function (err) {
-                });
-                next();
+                if (err){
+                    return utils.handleErr(err, next, true);
+                }else{
+                    return next();
+                }
             });
     };
 
@@ -334,10 +345,10 @@ docker.stop = function (grunt, options, done) {
 
     utils.iterateOverClusterContainers(grunt, options, stopIterator,
         function (err) {
-            utils.dealWithError(err, function (err) {
-            });
+            utils.handleErr(err, function (err) {
+            }, false);
             grunt.log.ok("Completed stopping containers");
-            done();
+            gruntDone();
         });
 
 };
@@ -352,7 +363,7 @@ docker.stop = function (grunt, options, done) {
  * @param {Function}
  *          done Callback to call when the requests are completed
  */
-docker.rm = function (grunt, options, done) {
+docker.rm = function (grunt, options, gruntDone) {
 
     /*
      * Function to remove a container
@@ -368,8 +379,8 @@ docker.rm = function (grunt, options, done) {
             + "  on node " + container.node.address);
         (new Docker(container.node.docker)).getContainer(container.container.Id)
             .remove({}, function (err, data) {
-                utils.dealWithError(err, function (err) {
-                });
+                utils.handleErr(err, function (err) {
+                }, true);
                 next();
             });
     };
@@ -377,10 +388,10 @@ docker.rm = function (grunt, options, done) {
     grunt.log.ok("Started removing containers");
 
     utils.iterateOverClusterContainers(grunt, options, removeIterator, function (err) {
-        utils.dealWithError(err, function (err) {
-        });
+        utils.handleErr(err, function (err) {
+        }, false);
         grunt.log.ok("Completed removing containers");
-        done();
+        gruntDone();
     });
 
 };
@@ -395,7 +406,7 @@ docker.rm = function (grunt, options, done) {
  * @param {Function}
  *          done Callback to call when the requests are completed
  */
-docker.rmi = function (grunt, options, done) {
+docker.rmi = function (grunt, options, gruntDone) {
 
     /*
      * Function to remove a image
@@ -406,8 +417,8 @@ docker.rmi = function (grunt, options, done) {
             + "  on node " + image.node.ipv4);
         (new Docker(image.node.docker)).getImage(image.image.Id)
             .remove({}, function (err, data) {
-                utils.dealWithError(err, function (err) {
-                });
+                utils.handleErr(err, function (err) {
+                }, true);
                 next();
             });
     };
@@ -416,11 +427,15 @@ docker.rmi = function (grunt, options, done) {
 
     utils.iterateOverClusterDockerImages(grunt, options, removeIterator, function (err) {
         utils.handleErr(err, function (err) {
-        }, true);
+        });
         grunt.log.ok("Completed removing images");
-        return done();
+        return gruntDone();
     });
 };
+
+docker.images = function(grunt, options, gruntDone){
+
+}
 
 /**
  * Tests all the Docker containers in the cluster
@@ -432,7 +447,7 @@ docker.rmi = function (grunt, options, done) {
  * @param {Function}
  *          done Callback to call when the requests are completed
  */
-module.exports.test = function (grunt, options, done) {
+docker.test = function (grunt, options, done) {
 
     grunt.log.ok("Started testing containers...");
 

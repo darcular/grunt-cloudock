@@ -49,9 +49,9 @@ node.create = function (grunt, options, gruntDone) {
             setTimeout(function () {
                 if (tupleUpdater._repeat) {
                     clearInterval(tupleUpdater);
-                    iterationDone();
+                    return iterationDone();
                 }
-            }, 60000);
+            }, 240000);
         });
     };
     var iteratorStopped = function (err) {
@@ -254,5 +254,5 @@ function promptBeforeDestroy(callback) {
 }
 
 function sshExec(username, address, cmd, callback) {
-    exec(["ssh", username + "@" + address, "-C"].concat(cmd).join(" "), callback);
+    exec(["ssh", '-o "StrictHostKeyChecking no"', username + "@" + address, "-C"].concat(cmd).join(" "), callback);
 }
