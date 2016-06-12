@@ -41,6 +41,8 @@ $ grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
  2. Create nodes
  3. Update security groups (adding rules)
  4. Update /etc/hosts on each node (build dns)
+ 5. Pull images into every node
+ 6. Run images
 
 ### Todo List:
  - cloudock:localimg:[ build | push ]  - - - Build app images locally and push to private registry
