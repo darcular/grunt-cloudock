@@ -1,0 +1,41 @@
+{
+  "pkgcloud" : {
+    "availability_zone" : "compute zone",
+    "key_name" : "name of public key for ssh VMs on cloud",
+    "user_data" : "VM init-script in base 64",
+    "client" : {
+      "authUrl" : "open stack auth url",
+      "region" : "",
+      "sshusername" : "e.g. ubuntu",
+      "username" : "os_user@xxx",
+      "password" : "OpenStack Password",
+      "provider" : "e.g. openstack",
+      "tenantName" : "Tenant Name"
+    }
+  },
+  "docker" : {
+    "master" : {
+      "protocol" : "http",
+      "host" : "localhost",
+      "port" : 2375
+    },
+    "client" : {
+      "protocol" : "http",
+      "port" : 2375
+    },
+    "registry" : {
+      "serveraddress" : "docker registry server ip",
+      "auth" : {
+        "email" : "",
+        "username" : "",
+        "password" : ""
+      }
+    }
+  },
+  "test" : {
+    "auth" : {
+      "username" : "testuser",
+      "password" : "testpasswd"
+    }
+  },
+}
