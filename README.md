@@ -14,7 +14,7 @@ $ grunt clouddock:node: [ create | list | destroy | dns]
  - Create the nodes (VMs) defined in Gruntfile.js
  - List cluster nodes specified by Gruntfile.js settings
  - Destroy cluster nodes
- - Build cluster's dns by adding theri hostname-ip pairs into each /etc/hosts file
+ - Build cluster's dns by adding their hostname-ip pairs into each /etc/hosts file
 
 ##### Manage cluster security groups:
 $ grunt cloudock:secgroup:[ create | list | update | destroy ]
@@ -33,10 +33,10 @@ $ grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
  - Remove containers on every node
  - List images on every node
  - Start all stopped containers on every node
- - Stop all running containers on every node
+ - Stop all running containers on every node 
  - Remove all images on every node
 
- #### Common task flow:
+#### Common task flow:
  1. Create security groups
  2. Create nodes
  3. Update security groups (adding rules)
