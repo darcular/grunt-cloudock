@@ -9,21 +9,24 @@ All sensitive data (credentials) should be set in sensitive.json (see the exampl
 All nodes, images and security groups settings are in Gruntfile.js.
 
 ##### Manage cluster VMs:
-grunt clouddock:node: [ create | list | destroy | dns]
+$ grunt clouddock:node: [ create | list | destroy | dns]
+
  - Create the nodes (VMs) defined in Gruntfile.js
  - List cluster nodes specified by Gruntfile.js settings
  - Destroy cluster nodes
  - Build cluster's dns by adding theri hostname-ip pairs into each /etc/hosts file
 
 ##### Manage cluster security groups:
-grunt cloudock:secgroup:[ create | list | update | destroy ]
+$ grunt cloudock:secgroup:[ create | list | update | destroy ]
+
  - Create empyt security group defineds in Gruntfile.js
  - List cluster security groups
  - Addding the rules into security groups using existing nodes' real ip. (To be executed after nodes creation)
  - Destroy cluster security nodes
- 
+
 ##### Manage docker engine on cluster nodes:
-grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
+$ grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
+
  - Pull specified images from docker registry (defined in sensitive.json)
  - Run each image on every node
  - List containers on every node
