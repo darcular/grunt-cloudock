@@ -8,7 +8,7 @@ A Grunt plugin to manage dockers on clusters using dockerode and pkgcloud.
 All sensitive data (credentials) should be set in sensitive.json (see the example).
 All nodes, images and security groups settings are in Gruntfile.js.
 
-##### Manage cluster VMs:
+#### Manage cluster VMs:
 $ grunt clouddock:node: [ create | list | destroy | dns]
 
  - Create the nodes (VMs) defined in Gruntfile.js
@@ -16,7 +16,7 @@ $ grunt clouddock:node: [ create | list | destroy | dns]
  - Destroy cluster nodes
  - Build cluster's dns by adding their hostname-ip pairs into each /etc/hosts file
 
-##### Manage cluster security groups:
+#### Manage cluster security groups:
 $ grunt cloudock:secgroup:[ create | list | update | destroy ]
 
  - Create empyt security group defineds in Gruntfile.js
@@ -24,7 +24,7 @@ $ grunt cloudock:secgroup:[ create | list | update | destroy ]
  - Addding the rules into security groups using existing nodes' real ip. (To be executed after nodes creation)
  - Destroy cluster security nodes
 
-##### Manage docker engine on cluster nodes:
+#### Manage docker engine on cluster nodes:
 $ grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
 
  - Pull specified images from docker registry (defined in sensitive.json)
@@ -36,7 +36,7 @@ $ grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
  - Stop all running containers on every node 
  - Remove all images on every node
 
-#### Common task flow:
+### Common task flow:
  1. Create security groups
  2. Create nodes
  3. Update security groups (adding rules)
