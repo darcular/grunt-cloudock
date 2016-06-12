@@ -47,3 +47,4 @@ $ grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
 ### Todo List:
  - cloudock:localimg:[ build | push ]  - - - Build app images locally and push to private registry
  - cloudock:registry:rm  - - - Remove image from private registry
+ - cloudock:volume - - - Manage volumes for clusters
