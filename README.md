@@ -14,12 +14,14 @@ grunt clouddock:node: [ create | list | destroy | dns]
  - List cluster nodes specified by Gruntfile.js settings
  - Destroy cluster nodes
  - Build cluster's dns by adding theri hostname-ip pairs into each /etc/hosts file
+
 ##### Manage cluster security groups:
 grunt cloudock:secgroup:[ create | list | update | destroy ]
  - Create empyt security group defineds in Gruntfile.js
  - List cluster security groups
  - Addding the rules into security groups using existing nodes' real ip. (To be executed after nodes creation)
  - Destroy cluster security nodes
+ 
 ##### Manage docker engine on cluster nodes:
 grunt cloudock:docker:[ pull | run | ps | rm | images | start | stop | rmi ]
  - Pull specified images from docker registry (defined in sensitive.json)
