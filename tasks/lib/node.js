@@ -44,7 +44,7 @@ node.create = function (grunt, options, gruntDone) {
                     nodes[nodeTuple.hostId] = nodeTuple;
                     if (hostStatus == "RUNNING") {
                         created = true;
-                    } else{
+                    } else {
                         created = false;
                     }
                     return callback();
@@ -55,9 +55,9 @@ node.create = function (grunt, options, gruntDone) {
                     return created
                 },
                 function (callback) {
-                    setTimeout(function(){
+                    setTimeout(function () {
                         return updateTuple(callback);
-                    },3000)
+                    }, 3000)
                 },
                 function (err) {
                     return err ?
@@ -160,8 +160,8 @@ node.destroy = function (grunt, options, gruntDone) {
                         },
                         function (err) {
                             if (err) {
-                                return  utils.handleErr(err, iterationDone, false);
-                            }else{
+                                return utils.handleErr(err, iterationDone, false);
+                            } else {
                                 grunt.log.ok("Deleted node: " + result.ok);
                                 return iterationDone();
                             }
@@ -219,8 +219,12 @@ node.dns = function (grunt, options, gruntDone) {
         // Edit hosts file on each ALIVE node
         function (hosts, next) {
             var iterator = function (node, iterationDone) {
-                var contentToAppend = hosts.join("\n") + "\n";
-                var cmdStr = "'sudo echo \"" + contentToAppend + "\" | cat - /etc/hosts > temp && sudo mv temp /etc/hosts'";
+                var dnsHead = "# Cluster " + options.cluster + " DNS Settings Start";
+                var dnsEnd = "# Cluster " + options.cluster + " DNS Settings End";
+                var contentToAppend = dnsHead + "\n" + hosts.join("\n") + "\n" + dnsEnd;
+                var cmdRemoveOldSettings = "sudo sed -i '/" + dnsHead + "/,/" + dnsEnd + "/d' /etc/hosts";
+                var cmdAppendSettings = "sudo echo '" + contentToAppend + "' | cat - /etc/hosts > temp && sudo mv temp /etc/hosts";
+                var cmdStr = cmdRemoveOldSettings + " && " +cmdAppendSettings;
                 sshExec(username, node.ipv4, cmdStr, function (err) {
                     utils.handleErr(err, iterationDone, true);
                     grunt.log.ok("Done appending hosts to " + node.name);
@@ -236,13 +240,14 @@ node.dns = function (grunt, options, gruntDone) {
         return err ? utils.handleErr(err, gruntDone, false) : gruntDone();
     });
 };
+node.dns.description = "Build local DNS for all cluster nodes"
 
 module.exports.node = node;
 
 function composeNodesTable(nodes) {
     var nodesList = _.toArray(nodes);
     var sortedNodesList = _.sortBy(nodesList, "hostName");
-    var nodePutleList = _.map(sortedNodesList, function(nodeTuple){
+    var nodePutleList = _.map(sortedNodesList, function (nodeTuple) {
         return _.toArray(nodeTuple);
     })
     var Table = require('cli-table');
@@ -294,5 +299,5 @@ function promptBeforeDestroy(callback) {
 }
 
 function sshExec(username, address, cmd, callback) {
-    exec(["ssh", '-o "StrictHostKeyChecking no"', username + "@" + address, "-C"].concat(cmd).join(" "), callback);
+    exec(["ssh", '-o "StrictHostKeyChecking no"', username + "@" + address, "-C"].concat('"'+cmd+'"').join(" "), callback);
 }
