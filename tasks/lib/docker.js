@@ -155,8 +155,9 @@ docker.run = function (grunt, options, done) {
         // ["scats-1-master:115.146.95.194","scats-1-slave:115.146.95.192","dockerhost:115.146.95.192","sparkslave:115.146.95.192","sparkmaster:115.146.95.194"]
         // ["scats-1-master:115.146.95.194","scats-1-slave:115.146.95.192","dockerhost:115.146.95.194","sparkmaster:115.146.95.194"]
 
+        var args = [hosts.join(',')].concat(image.options.run.cmd);
         var streamo = (new Docker(image.node.docker)).run(image.repo,
-            image.options.run.cmd, null, createOptions, image.options.run.start,
+            args, null, createOptions, image.options.run.start,
             function (err, data, container) {
                 utils.handleErr(err, function (err) {
                 }, true);
@@ -211,6 +212,7 @@ docker.run = function (grunt, options, done) {
         function (err) {
             if (err)
                 return utils.handleErr(err, done, false);
+            hosts.sort();
             utils.iterateOverClusterImages(
                 grunt,
                 options,
